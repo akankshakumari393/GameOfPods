@@ -1,0 +1,64 @@
+kubectl config set-credentials drogo --client-certificate=/root/drogo.crt --client-key=/root/drogo.key
+kubectl config set-context developer --cluster=kubernetes --user=drogo
+kubectl create role developer-role --resource=pods,svc,pvc --verb="*" --namespace=development
+kubectl create rolebinding developer-rolebinding --role=developer-role --user=drogo -n development
+kubectl config use-context developer
+
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jekyll-site
+  namespace: development
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jekyll
+  namespace: development
+  labels:
+    run: jekyll
+spec:
+  containers:
+    - name: jekyll
+      image: kodekloud/jekyll-serve
+      volumeMounts:
+        - name: site
+          mountPath: "/site"
+  initContainers:
+    - name: copy-jekyll-site
+      image: kodekloud/jekyll
+      command:  [ "jekyll", "new", "/site" ]
+      volumeMounts:
+        - name: site
+          mountPath: "/site"
+  volumes:
+    - name: site
+      persistentVolumeClaim:
+        claimName: jekyll-site
+---
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jekyll
+  namespace: development
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 4000
+    nodePort: 30097
+  selector:
+    run: jekyll
+---
